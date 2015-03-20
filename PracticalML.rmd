@@ -1,0 +1,175 @@
+---
+title: "Practical Machine Learning Project"
+author: "Petri Reiman"
+date: "Monday, March 16, 2015"
+output: html_document
+---
+
+# Introduction
+
+ This is a project work for Coursera MOOC Practical Machine Learning. The purpose of this exercise is to build a machine learning algorithm that can detect an activity based on different measurement values.
+
+
+## Background
+
+Following background information was provided.
+
+"Using devices such as Jawbone Up, Nike FuelBand, and Fitbit it is now possible to collect a large amount of data about personal activity relatively inexpensively. These type of devices are part of the quantified self movement - a group of enthusiasts who take measurements about themselves regularly to improve their health, to find patterns in their behavior, or because they are tech geeks. One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it. In this project, your goal will be to use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants. They were asked to perform barbell lifts correctly and incorrectly in 5 different ways. More information is available from the website here: http://groupware.les.inf.puc-rio.br/har (see the section on the Weight Lifting Exercise Dataset). "
+
+## Data
+
+Data for this project is available from the following locations
+- https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv
+- https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv
+
+Data is donated to public by Groupware: http://groupware.les.inf.puc-rio.br/har
+
+## Development & Testing strategy
+We have 3 data sets available for making the algorithm. A training set, a training test set that is set aside from training data and then the final test set of 20 activities.
+
+Training set contains variable *classe* which determines what kind of exercise subject was doing. 
+
+We will test a decision tree and two different randomforests and choose the best algorithm.
+
+
+# Data preprocessing
+
+Load necessary libraries and divide training set into train and test sets. Hold the real test set in reserve for final testing.
+```{r}
+library( caret );
+ library(rpart)
+data <- read.csv("pml-training.csv", header=TRUE)
+set.seed(1)
+partition <- createDataPartition( data$user_name, p=0.6, list=FALSE);
+train <- data[partition,] ; train_test <- data[-partition,]
+```
+
+Next remove columns with low variance and with more than 50% NA values.
+
+```{r}
+colWithNearZeroVar <- nearZeroVar(train)
+clean_train <- train[-colWithNearZeroVar]
+
+listGoodCols <- function ( df, percentage=0.50 )
+{
+  limit = nrow(df)*percentage
+  t <- apply( df, 2, function(x) sum(is.na(x) ))
+  t1 <- lapply( t, function(x) {!(x>limit)})
+  t1 <- simplify2array(t1)
+  t1
+}
+goodCols <- listGoodCols( clean_train, 0.6 )
+clean_train <- clean_train[, goodCols]
+
+## remove id
+## clean_train <- clean_train[c(-1)]
+ncol( clean_train )
+colnames( clean_train)
+```
+After cleaning we still have 59 columns and the first six of them, id's and timestamps, are clearly not relevant to decision tree or random forest algorithms, so we remove those.
+
+```{r}
+remove <- c(1:6)
+clean_train <- clean_train[, -remove]
+ncol ( clean_train )
+```
+After cleaning we have a total of 53 data columns, including the *classe* variable.
+
+Repeat same data cleaning process to *train_test* dataset.
+
+```{r}
+clean_traintest <- train_test[-colWithNearZeroVar]
+clean_traintest <- clean_traintest[, goodCols]
+remove <- c(1:6)
+clean_traintest <- clean_traintest[, -remove]
+```
+
+As we are using tree models we don't have to remove correlating parameters.
+
+# Machine Learning models
+
+## Run a decision tree
+
+First we try how a decision tree model copes with the data.
+
+```{r, echo=TRUE}
+fit_decisionTree <- rpart( classe ~ ., data=clean_train, method="class" )
+predictions_dt <- predict( fit_decisionTree, clean_traintest, type="class")
+confusionMatrix( predictions_dt, clean_traintest$classe)
+```
+Random forest gives an accuracy of 73% which in some real world cases is ok, but not very good in the context of this exercise. It is particularly bad at detecting activity *D* at only 55% accuracy.
+
+## Run a random forest model
+
+To get a better fit we use *random forest* algorithm with K-fold cross validation. I am using *Caret* and let it do the crossvalidation. Number of folds is limited to 3 to accomodate for the low grade pc used to build the model. Theoretically CV and setting aside a testing set would not be needed with randomforest, as it internally uses bootstrapping and OOB gives a good error estimate. However we use it so we can compare the different models.
+
+```{r, echo=TRUE}
+fit_randomForest <- train( classe ~ ., data=clean_train, trControl=trainControl(method="cv", number=3), method="rf")
+
+print( fit_randomForest )
+print( fit_randomForest$finalModel )
+```
+
+The model has an OOB error rate or 0.85% and all class errors except *D* are about under 1%. D still has an error rate of 2.2%.
+
+Lets check the data against our traintest data set to get estimate of out of sample error.
+```{r, echo=TRUE}
+
+predictions_rf <- predict( fit_randomForest, clean_traintest ) 
+confusionMatrix( predictions_rf, clean_traintest$classe)
+```
+
+Results are good, but we might be able to use less predictors and avoid possible overfitting. We get 20 most important features and use them for the next model.
+
+```{r, echo=TRUE}
+varImp( fit_randomForest )
+reducedCols <- c("roll_belt","yaw_belt", "magnet_dumbbell_z", "pitch_forearm", "pitch_belt", "magnet_dumbbell_y", "roll_forearm", "magnet_dumbbell_x", "accel_belt_z", "magnet_belt_z", "accel_dumbbell_y", "roll_dumbbell", "magnet_belt_y", "accel_dumbbell_z", "roll_arm", "accel_forearm_x", "gyros_belt_z", "yaw_dumbbell", "accel_dumbbell_x", "gyros_dumbbell_y", "classe")
+clean_train2 <- clean_train[, reducedCols]
+fit_randomForest2 <- train( classe ~ ., data=clean_train2, trControl=trainControl(method="cv", number=3), method="rf")
+
+print( fit_randomForest2 )
+print( fit_randomForest2$finalModel )
+```
+
+```{r, echo=TRUE}
+
+predictions_rf2 <- predict( fit_randomForest2, clean_traintest ) 
+confusionMatrix( predictions_rf2, clean_traintest$classe)
+```
+Model accuracy (out of sample) is still 98,8% percent for model with less parameters with the training test set, so the model seems to be good. 
+
+
+# Test data set
+
+Now we run both *random forest* models against test dataset and see whether they produce similar results.
+
+```{r}
+testdata <- read.csv("pml-testing.csv", header=TRUE)
+
+reducedTestCols <- c("roll_belt","yaw_belt", "magnet_dumbbell_z", "pitch_forearm", "pitch_belt", "magnet_dumbbell_y", "roll_forearm", "magnet_dumbbell_x", "accel_belt_z", "magnet_belt_z", "accel_dumbbell_y", "roll_dumbbell", "magnet_belt_y", "accel_dumbbell_z", "roll_arm", "accel_forearm_x", "gyros_belt_z", "yaw_dumbbell", "accel_dumbbell_x", "gyros_dumbbell_y")
+
+clean_testdata <- testdata[,reducedTestCols]
+answers <- predict( fit_randomForest2, clean_testdata )  
+answers2 <- predict( fit_randomForest, testdata )
+answers == answers2
+```
+From the output we can conclude both models perform identically with the test dataset. Actual results are hidden and just result comparison is shown. To avoid overfitting at this stage it would seem likely the model with only top 20 parameters should be chosen as the final model.
+
+# Conclusions
+We were able to achieve 98.8 accuracy with a random forest model and were able to predict all the test cases perfectly.
+
+
+```{r, echo=FALSE}
+
+## Code for writing test data
+pml_write_files = function(x){
+  n = length(x)
+  for(i in 1:n){
+    filename = paste0("problem_id_",i,".txt")
+    write.table(x[i],file=filename,quote=FALSE,row.names=FALSE,col.names=FALSE)
+  }
+}
+answers <- predict( fit_randomForest2, clean_testdata )  
+answers2 <- predict( fit_randomForest, testdata )
+pml_write_files(answers)
+```
