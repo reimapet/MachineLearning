@@ -61,8 +61,6 @@ listGoodCols <- function ( df, percentage=0.50 )
 goodCols <- listGoodCols( clean_train, 0.6 )
 clean_train <- clean_train[, goodCols]
 
-## remove id
-## clean_train <- clean_train[c(-1)]
 ncol( clean_train )
 colnames( clean_train)
 ```
@@ -96,7 +94,7 @@ fit_decisionTree <- rpart( classe ~ ., data=clean_train, method="class" )
 predictions_dt <- predict( fit_decisionTree, clean_traintest, type="class")
 confusionMatrix( predictions_dt, clean_traintest$classe)
 ```
-Random forest gives an accuracy of 73% which in some real world cases is ok, but not very good in the context of this exercise. It is particularly bad at detecting activity *D* at only 55% accuracy.
+Random forest gives an accuracy of 74% which in some real world cases is ok, but not very good in the context of this exercise. It is particularly bad at detecting activity *D* at only 55% accuracy.
 
 ## Run a random forest model
 
@@ -130,6 +128,8 @@ print( fit_randomForest2 )
 print( fit_randomForest2$finalModel )
 ```
 
+Check the reduced model against our *train_test* dataset.
+
 ```{r, echo=TRUE}
 
 predictions_rf2 <- predict( fit_randomForest2, clean_traintest ) 
@@ -139,23 +139,21 @@ Model accuracy is still 98,8% percent for model with less parameters with the tr
 
 # Test data set
 
-Now we run both *random forest* models against test dataset and see whether they produce similar results.
+Now we run both *random forest* models against test dataset and see whether they produce similar results. As we did not perform any transformations to the training data (we just removed excess columns) we don't have to process test data. Models just pick the columns they want to use.
 
 ```{r}
 testdata <- read.csv("pml-testing.csv", header=TRUE)
 
-reducedTestCols <- c("roll_belt","yaw_belt", "magnet_dumbbell_z", "pitch_forearm", "pitch_belt", "magnet_dumbbell_y", "roll_forearm", "magnet_dumbbell_x", "accel_belt_z", "magnet_belt_z", "accel_dumbbell_y", "roll_dumbbell", "magnet_belt_y", "accel_dumbbell_z", "roll_arm", "accel_forearm_x", "gyros_belt_z", "yaw_dumbbell", "accel_dumbbell_x", "gyros_dumbbell_y")
-
-clean_testdata <- testdata[,reducedTestCols]
-answers <- predict( fit_randomForest2, clean_testdata )  
+answers <- predict( fit_randomForest2, testdata )  
 answers2 <- predict( fit_randomForest, testdata )
 answers == answers2
 ```
 From the output we can conclude both models perform identically with the test dataset. Actual results are hidden and just result comparison is shown. To avoid overfitting the model for training data at this stage we choose the model with only top 20 parameters as the final model.
 
 # Conclusions
-We were able to achieve 98.8 accuracy with a random forest model and were able to predict all the test cases perfectly. OOB error for the model is 1.37 with the training data. 20 most important parameters were used for the model.
+We were able to achieve 98.8 accuracy with a random forest model and were able to predict all the test cases perfectly. OOB error for the model is 1.37% with the training data. 20 most important parameters were used for the model.
 
+It would probably be possible to reduce the number of predictors even further by repeating the process of using the most important predictors.
 
 ```{r, echo=FALSE}
 
@@ -167,7 +165,7 @@ pml_write_files = function(x){
     write.table(x[i],file=filename,quote=FALSE,row.names=FALSE,col.names=FALSE)
   }
 }
-answers <- predict( fit_randomForest2, clean_testdata )  
+answers <- predict( fit_randomForest2, testdata )  
 answers2 <- predict( fit_randomForest, testdata )
 pml_write_files(answers)
 ```
