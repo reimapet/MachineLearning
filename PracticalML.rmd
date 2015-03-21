@@ -75,7 +75,7 @@ ncol ( clean_train )
 ```
 After cleaning we have a total of 53 data columns, including the *classe* variable.
 
-Repeat same data cleaning process to *train_test* dataset.
+Same data cleaning process is executed to *train_test* dataset.
 
 ```{r}
 clean_traintest <- train_test[-colWithNearZeroVar]
@@ -84,7 +84,6 @@ remove <- c(1:6)
 clean_traintest <- clean_traintest[, -remove]
 ```
 
-As we are using tree models we don't have to remove correlating parameters.
 
 # Machine Learning models
 
@@ -136,8 +135,7 @@ print( fit_randomForest2$finalModel )
 predictions_rf2 <- predict( fit_randomForest2, clean_traintest ) 
 confusionMatrix( predictions_rf2, clean_traintest$classe)
 ```
-Model accuracy (out of sample) is still 98,8% percent for model with less parameters with the training test set, so the model seems to be good. 
-
+Model accuracy is still 98,8% percent for model with less parameters with the training test set, so the model seems to be good. OOB error is 1.37%. OOB eror is likely to be slightly higher with test data, but it is a good estimate.
 
 # Test data set
 
@@ -153,10 +151,10 @@ answers <- predict( fit_randomForest2, clean_testdata )
 answers2 <- predict( fit_randomForest, testdata )
 answers == answers2
 ```
-From the output we can conclude both models perform identically with the test dataset. Actual results are hidden and just result comparison is shown. To avoid overfitting at this stage it would seem likely the model with only top 20 parameters should be chosen as the final model.
+From the output we can conclude both models perform identically with the test dataset. Actual results are hidden and just result comparison is shown. To avoid overfitting the model for training data at this stage we choose the model with only top 20 parameters as the final model.
 
 # Conclusions
-We were able to achieve 98.8 accuracy with a random forest model and were able to predict all the test cases perfectly.
+We were able to achieve 98.8 accuracy with a random forest model and were able to predict all the test cases perfectly. OOB error for the model is 1.37 with the training data. 20 most important parameters were used for the model.
 
 
 ```{r, echo=FALSE}
